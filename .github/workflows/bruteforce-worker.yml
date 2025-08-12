@@ -98,7 +98,7 @@ jobs:
             echo "::error:: Failed to download '$PACKAGE_FILENAME'. The artifact may not exist or the name is incorrect."
             exit 0
           fi
-          echo "SUCCESS: Downloaded '$PACKAGE_FILENAME'.""
+          echo "SUCCESS: Downloaded '$PACKAGE_FILENAME'."
 
       - name: Extract Bruteforce Package
         shell: bash
