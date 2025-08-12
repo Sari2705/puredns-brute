@@ -3,10 +3,6 @@ name: Puredns Bruteforce Worker (Tertiary)
 on:
   workflow_dispatch:
     inputs:
-      primary_github_server_url:
-        description: 'The server URL of the primary GitHub instance (e.g., https://github.com)'
-        required: true
-        type: string    
       primary_repo_owner:
         description: 'The owner of the primary repository (e.g., your-main-user).'
         required: true
@@ -23,7 +19,6 @@ on:
         description: 'The name of the artifact package (e.g., bruteforce-package-...).'
         required: true
         type: string
-        
       tertiary_matrix_json:
         description: 'The JSON string representing the matrix of chunks assigned to this worker.'
         required: true
@@ -33,9 +28,6 @@ permissions:
   contents: write # For checkout
   actions: read   # To read artifacts from another repo
 
-env:
-  # Max parallel jobs this tertiary account will run for a single trigger
-  WORKER_MAX_PARALLEL: 20
 
 jobs:
   process_assigned_chunks_tertiary:
