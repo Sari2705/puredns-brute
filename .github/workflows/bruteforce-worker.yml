@@ -123,7 +123,7 @@ jobs:
             exit 1
           fi
           
-          puredns bruteforce "$CHUNK_FILE" targets.txt \
+          puredns bruteforce "$CHUNK_FILE" -d targets.txt \
             -r resolvers-trusted.txt \
             --skip-validation \
             --skip-wildcard-filter \
