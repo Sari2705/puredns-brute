@@ -1,1 +1,150 @@
+name: Puredns Bruteforce Worker (Tertiary)
 
+on:
+  workflow_dispatch:
+    inputs:
+      primary_repo_owner:
+        description: 'The owner of the primary repository (e.g., your-main-user).'
+        required: true
+        type: string
+      primary_repo_name:
+        description: 'The name of the primary repository.'
+        required: true
+        type: string
+      primary_run_id:
+        description: 'The run ID of the main workflow in the primary repository.'
+        required: true
+        type: string
+      chunk_package_artifact_name:
+        description: 'The name of the artifact package (e.g., bruteforce-package-...).'
+        required: true
+        type: string
+      worker_matrix_json:
+        description: 'The JSON string representing the matrix of chunks assigned to this worker.'
+        required: true
+        type: string
+
+permissions:
+  contents: write # For checkout
+  actions: read   # To read artifacts from another repo
+
+env:
+  # Max parallel jobs this tertiary account will run for a single trigger
+  WORKER_MAX_PARALLEL: 20
+
+jobs:
+  process_assigned_chunks_tertiary:
+    name: Process Assigned Bruteforce Chunks (Tertiary)
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/pcoder7/spider-puredns-actions:latest
+      credentials:
+        # Use credentials for your container registry in the tertiary account
+        username: ${{ secrets.GHCR_USER }}
+        password: ${{ secrets.GHCR_TOKEN }}
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ env.WORKER_MAX_PARALLEL }}
+      matrix:
+        pair: ${{ fromJson(github.event.inputs.worker_matrix_json || '[]') }}
+    steps:
+      - name: Display Trigger Payload (Debug)
+        run: |
+          echo "TERTIARY WORKER: Received payload:"
+          echo "${{ toJson(github.event.inputs) }}"
+          echo "---"
+          echo "TERTIARY WORKER: My assigned chunk for this job instance:"
+          echo "${{ toJson(matrix.pair) }}"
+
+      - name: Checkout repository (this worker's repo)
+        uses: actions/checkout@v3
+
+      - name: Download Full Chunks Package from Primary Account
+        env:
+          # This secret MUST be configured in this tertiary repo.
+          # It's a PAT from the primary account with `actions:read` permissions.
+          GH_TOKEN: ${{ secrets.PAT_FOR_PRIMARY_ACCOUNT_READ }}
+          PRIMARY_REPO: ${{ github.event.inputs.primary_repo_owner }}/${{ github.event.inputs.primary_repo_name }}
+          PRIMARY_RUN_ID: ${{ github.event.inputs.primary_run_id }}
+          ARTIFACT_NAME: ${{ github.event.inputs.chunk_package_artifact_name }}
+        shell: bash
+        run: |
+          echo "TERTIARY WORKER: Downloading artifact '$ARTIFACT_NAME' from '$PRIMARY_REPO', run ID '$PRIMARY_RUN_ID'"
+          
+          if ! command -v gh &> /dev/null; then
+            apt-get update -qy && apt-get install -qy curl && \
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
+            chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && \
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
+            apt-get update -qy && apt-get install -qy gh
+          fi
+
+          if ! command -v gh &> /dev/null; then
+            echo "::error:: gh CLI installation failed."
+            exit 1
+          fi
+          
+          gh run download "$PRIMARY_RUN_ID" -R "$PRIMARY_REPO" -n "$ARTIFACT_NAME" --dir .
+          
+          PACKAGE_FILENAME="$ARTIFACT_NAME.tar.gz"
+          if [ ! -f "$PACKAGE_FILENAME" ]; then
+            echo "::error:: Failed to download '$PACKAGE_FILENAME'."
+            exit 1
+          fi
+          echo "SUCCESS: Downloaded '$PACKAGE_FILENAME'."
+
+      - name: Extract Bruteforce Package
+        shell: bash
+        run: |
+          PACKAGE_FILENAME="${{ github.event.inputs.chunk_package_artifact_name }}.tar.gz"
+          echo "TERTIARY WORKER: Extracting $PACKAGE_FILENAME..."
+          tar -xzvf "$PACKAGE_FILENAME"
+          if [ ! -d "chunks" ] || [ ! -f "targets.txt" ] || [ ! -f "resolvers-trusted.txt" ]; then
+            echo "::error:: 'chunks/', 'targets.txt', or 'resolvers-trusted.txt' missing after extraction."
+            exit 1
+          fi
+          echo "SUCCESS: Extraction complete."
+
+      - name: Run puredns bruteforce on assigned chunk
+        shell: bash
+        run: |
+          CHUNK_FILE="${{ matrix.pair.chunk }}"
+          echo "TERTIARY WORKER: Starting puredns bruteforce on chunk '$CHUNK_FILE'..."
+
+          if [ ! -f "$CHUNK_FILE" ]; then
+            echo "::error:: Assigned chunk file '$CHUNK_FILE' not found!"
+            exit 1
+          fi
+          
+          puredns bruteforce "$CHUNK_FILE" targets.txt \
+            -r resolvers-trusted.txt \
+            --skip-validation \
+            --skip-wildcard-filter \
+            --rate-limit 5000 \
+            --write "puredns_results.txt" \
+            --quiet
+
+          
+          if [ ! -s "puredns_results.txt" ]; then
+            echo "INFO: No subdomains found for this chunk."
+            touch puredns_results.txt
+          else
+            echo "SUCCESS: Found $(wc -l < puredns_results.txt) subdomains in this chunk."
+          fi
+
+      - name: Create Safe Chunk Name for Artifact
+        id: safe_name
+        shell: bash
+        run: |
+          SAFE_CHUNK_NAME=$(echo "${{ matrix.pair.chunk }}" | tr '/' '_')
+          echo "safe_chunk_name=$SAFE_CHUNK_NAME" >> $GITHUB_OUTPUT
+
+      # --- This is the key difference from the secondary worker ---
+      - name: Upload Worker Results
+        uses: actions/upload-artifact@v4
+        with:
+          # The name follows the 'bruteforce-results-*' pattern for final merging.
+          # We add '-tertiary' to easily identify its origin during debugging.
+          name: bruteforce-results-tertiary-${{ steps.safe_name.outputs.safe_chunk_name }}
+          path: puredns_results.txt
+          retention-days: 1
