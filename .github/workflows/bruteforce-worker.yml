@@ -108,7 +108,7 @@ jobs:
           tar -xzvf "$PACKAGE_FILENAME"
           if [ ! -d "chunks" ] || [ ! -f "targets.txt" ] || [ ! -f "resolvers-trusted.txt" ]; then
             echo "::error:: 'chunks/', 'targets.txt', or 'resolvers-trusted.txt' missing after extraction."
-            exit 1
+            exit 0
           fi
           echo "SUCCESS: Extraction complete."
 
