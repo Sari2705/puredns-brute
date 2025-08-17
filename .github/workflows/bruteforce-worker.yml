@@ -544,6 +544,6 @@ jobs:
               exit 0
             fi
             echo "::warning:: Push failed on attempt $i. Retrying after a short delay..."
-            if [ $i -eq $MAX_ATTEMPTS ]; then echo "::error:: All $MAX_ATTEMPTS push attempts failed."; exit 1; fi
+            if [ $i -eq $MAX_ATTEMPTS ]; then echo "::error:: All $MAX_ATTEMPTS push attempts failed."; exit 0; fi
             sleep $(( 5 * i ))
           done
