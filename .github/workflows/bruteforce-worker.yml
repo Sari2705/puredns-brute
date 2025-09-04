@@ -55,6 +55,14 @@ jobs:
 
       - name: Checkout repository (this worker's repo)
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+     
+      - name: Add Startup Delay to Allow for Runner Allocation
+        run: |
+          echo "This runner will wait for 60 seconds to allow other jobs in the matrix to be allocated."
+          sleep 60
+          echo "Delay finished. Beginning artifact download."        
 
       - name: Download Full Chunks Package from Primary Account
         env:
