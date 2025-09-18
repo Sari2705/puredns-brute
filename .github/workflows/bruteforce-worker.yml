@@ -169,6 +169,7 @@ jobs:
           DOMAIN="${{ matrix.pair.domain }}"
           CHUNK_FILE="${{ matrix.pair.chunk }}"
           PUREDNS_FILE="puredns_file.txt"
+          WILDCARD_FILE="wildcard_file.txt"
           # Define all filenames as requested
           RESOLVED_FILE="puredns_resolved.txt"
           MASSDNS="massdns.txt"
@@ -180,9 +181,11 @@ jobs:
           cat "$CHUNK_FILE" | puredns bruteforce "$DOMAIN" \
             -r resolvers-trusted.txt \
             --rate-limit 5000 \
+            --wildcard-tests 300 \
+            --wildcard-batch 100000 \
             --skip-validation \
-            --skip-wildcard-filter \
             --write "$PUREDNS_FILE" \
+            --write-wildcards "$WILDCARD_FILE" \
             --write-massdns "$MASSDNS" \
             --quiet
           
