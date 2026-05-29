@@ -471,7 +471,7 @@ jobs:
       - name: Organize and Push to store-recon    
         shell: bash
         env:
-          STORE_RECON_PAT: ${{ secrets.PAT_FOR_SECONDARY_ACCOUNT_REPO }}
+          STORE_RECON_PAT: ${{ secrets.STORE_RECON_PAT }}
           ACCOUNT2_USERNAME: ${{ secrets.ACCOUNT2_REPO_OWNER }}
           STORE: ${{ secrets.STORE }}
           CORRELATION_ID: ${{ github.event.inputs.primary_run_id }}
